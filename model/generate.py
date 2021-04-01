@@ -3,7 +3,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 import tensorflow as tf
 
-import numpy as np
+import numpy as np 
 import time
 import mdn
 import lstm_attention
