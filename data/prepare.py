@@ -110,16 +110,10 @@ for i in range(len(xmlfiles)):
 
 
 
-assert(len(stroke_data)==len(ascii_data)), "There should be a 1:1 correspondence between stroke data and ascii labels."
-
-
-
+# assert(len(stroke_data)==len(ascii_data)), "There should be a 1:1 correspondence between stroke data and ascii labels."
 
 f = open(data_filename,"wb")
 pickle.dump([stroke_data,ascii_data], f, protocol=2)
 f.close()
 print()
 print ("Finished parsing dataset. Saved {} lines".format(len(stroke_data)))
-
-# except:
-    # print("could not find or load data")
