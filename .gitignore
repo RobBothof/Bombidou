@@ -2,3 +2,4 @@ data/ascii
 data/lineStrokes
 model/checkpoints
 model/old
+__pycache__/

@@ -2,7 +2,6 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 
 import tensorflow as tf
-
 import numpy as np
 import time
 import mdn
@@ -11,7 +10,8 @@ import random
 import pickle
 import matplotlib.pyplot as plt
 import math
-# from IPython.display import clear_output
+
+
 alphabet = " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890"
 
 data_filename = "../data/training_data.pkl"
@@ -20,30 +20,33 @@ checkpoint_filepath="checkpoints/bombidou-E{epoch:02d}-L{loss:.3f}.h5"
 plt.rcParams.update({'font.size': 12})
 plt.style.use('dark_background')
  
+#source data (x,y coords) will be divided by: 
 scale_factor = 100
 
+#length of the sequence to train on, there can be more sequences in one line of text
 SEQ_LEN = 512
-NUMBER_OF_LINES = 0
+
+#number of textlines to reserve for validation
 NUMBER_OF_TESTLINES = 128
 
-
+#model parameters
 BATCH_SIZE = 128
 MAX_BATCHES = 256
-
 WINDOW_WIDTH = 2
-HIDDEN_UNITS = 400
-EPOCHS = 50
+HIDDEN_UNITS = 400 #size of RNN layers
+
+EPOCHS = 50 # max number of epochs
 OUTPUT_DIMENSION = 3
 MDN_MIXTURES = 20
 WINDOW_MIXTURES = 10
 DROPOUT = 0.25
+LEARNING_RATE=0.0005
+CLIP_VALUE=0.1
 
 # SEED = 2345  # set random seed for reproducibility
 # random.seed(SEED)
 # np.random.seed(SEED)
 
-LEARNING_RATE=0.0005
-CLIP_VALUE=0.1
 
 ### remove old checkpoints in test folder
 for filename in os.listdir("checkpoints"):
@@ -51,7 +54,7 @@ for filename in os.listdir("checkpoints"):
     if os.path.isfile(file_path) or os.path.islink(file_path):
         os.unlink(file_path)
 
-###some GPU optimilisation
+### GPU optimilisation
 print()
 for dev in tf.python.client.device_lib.list_local_devices():
     if (dev.name == tf.test.gpu_device_name()):
@@ -69,20 +72,7 @@ if physical_gpus:
         # Memory growth must be set before GPUs have been initialized
         print(e)
 
-inputs = tf.keras.layers.Input(shape=(SEQ_LEN,OUTPUT_DIMENSION+len(alphabet)+1), name='inputs')
-# drop0_out = tf.keras.layers.Dropout(DROPOUT) (inputs)
-lstm1_out = lstm_attention.LSTM_ATTENTION(HIDDEN_UNITS,WINDOW_MIXTURES,False) (inputs)
-drop1_out = tf.keras.layers.Dropout(DROPOUT) (lstm1_out)
-lstm2_out = tf.keras.layers.LSTM(HIDDEN_UNITS, return_sequences=True) (drop1_out)
-drop2_out = tf.keras.layers.Dropout(DROPOUT) (lstm2_out)
-lstm3_out = tf.keras.layers.LSTM(HIDDEN_UNITS, return_sequences=True) (drop2_out)
-drop3_out = tf.keras.layers.Dropout(DROPOUT) (lstm3_out)
-mdn_out = tf.keras.layers.TimeDistributed(mdn.MDN(OUTPUT_DIMENSION, MDN_MIXTURES), name='mdn')(drop3_out)
-
-model = tf.keras.models.Model(inputs=inputs, outputs=mdn_out)
-model.compile(loss=mdn.get_mixture_loss_func(OUTPUT_DIMENSION,MDN_MIXTURES), optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE,clipvalue=CLIP_VALUE))
-model.summary()
-
+## Helper class to draw/log loss and validation
 class LogLosses():
     def create(self):
         self.i = 1
@@ -114,13 +104,30 @@ class LogLosses():
         plt.savefig("loss.png") 
 
 
-### LOAD DATA :: load dataset and prepare training_batches
+### construct the model
+
+inputs = tf.keras.layers.Input(shape=(SEQ_LEN,OUTPUT_DIMENSION+len(alphabet)+1), name='inputs')
+# drop0_out = tf.keras.layers.Dropout(DROPOUT) (inputs)
+lstm1_out = lstm_attention.LSTM_ATTENTION(HIDDEN_UNITS,WINDOW_MIXTURES,False) (inputs)
+drop1_out = tf.keras.layers.Dropout(DROPOUT) (lstm1_out)
+lstm2_out = tf.keras.layers.LSTM(HIDDEN_UNITS, return_sequences=True) (drop1_out)
+drop2_out = tf.keras.layers.Dropout(DROPOUT) (lstm2_out)
+lstm3_out = tf.keras.layers.LSTM(HIDDEN_UNITS, return_sequences=True) (drop2_out)
+drop3_out = tf.keras.layers.Dropout(DROPOUT) (lstm3_out)
+mdn_out = tf.keras.layers.TimeDistributed(mdn.MDN(OUTPUT_DIMENSION, MDN_MIXTURES), name='mdn')(drop3_out)
+
+### We are using the loss function from the MDN plugin!
+model = tf.keras.models.Model(inputs=inputs, outputs=mdn_out)
+model.compile(loss=mdn.get_mixture_loss_func(OUTPUT_DIMENSION,MDN_MIXTURES), optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE,clipvalue=CLIP_VALUE))
+model.summary()
+
+
+### LOAD and prepare Dataset
 f = open(data_filename,"rb")
 [raw_stroke_data, raw_ascii_data] = pickle.load(f)
 f.close()
 stroke_data = []
 ascii_data = []
-
 
 # convert to numpy array, limit, scale, calc max asccii size
 for i in range(len(raw_stroke_data)):
@@ -136,30 +143,18 @@ for i in range(len(raw_stroke_data)):
 print ()
 print ("datafile loaded: " + str(len(stroke_data)) + " lines.")
 
-# timer1=time.time()
-#PREPARE Validation SET
+### CREATE Validation SET
 random_validation_list = np.random.permutation(NUMBER_OF_TESTLINES)
 x_validation_set = []
 y_validation_set = []
 
-# NPT = np.empty((2048,SEQ_LEN,len(alphabet)+4)) #//samples / sequence /values
-# NPTy = np.empty((2048,SEQ_LEN,3)) #//samples / sequence /values
-# print (np.shape(NPT))
-# stroke_seq = stroke_data[10]
-
-# ss=np.array(stroke_seq)
-# print (np.shape(NPTy))
-# np.append(NPTy,ss[:SEQ_LEN])
-# print (np.shape(NPTy))
-
-# NPTy[0] = ss[:SEQ_LEN]
-
-# print (NPTy[0])
-
 for i in range(NUMBER_OF_TESTLINES):
     stroke_seq = stroke_data[random_validation_list[i]]
     ascii_seq = ascii_data[random_validation_list[i]]
-    ppc = len(stroke_seq)/len(ascii_seq)
+
+    ### precalculate the softwindow here
+
+    ppc = len(stroke_seq)/len(ascii_seq) # average number of points for each character in this sequence
     stroke_onehot_seq = []
 
     for windowpos in range (len(stroke_seq)):
@@ -170,96 +165,53 @@ for i in range(NUMBER_OF_TESTLINES):
             local_windowpos = (lc + 0.5) * ppc - windowpos
 
             if (local_windowpos > windowwidth*-0.5 and local_windowpos < windowwidth*0.5):
-                # char_strength = math.sin(((local_windowpos / windowwidth) + 0.5) * math.pi)
                 char_strength = math.cos(((local_windowpos / windowwidth) + 0.5) * 2.0 * math.pi) * -0.5 + 0.5
                 onehot[alphabet.find(ascii_seq[lc])+1] = char_strength
 
+        # combine softwindow with pen-data
         combined = []
         combined.extend(stroke_seq[windowpos])
         combined.extend(onehot.tolist())
 
         stroke_onehot_seq.append(combined)   
 
+    ### now we append the sequences to the validation array.
+    ### we can get multiple sequences out of one line, and randomize them
+    ### by shuffling the startpoint of each sequence
+
+    ### create a shuffled array of startpoints for the number of sequences we can fit in this line
     randomstart = np.random.permutation(len(stroke_seq) - SEQ_LEN -2)
+
+    # append sequence to the validation set
     for j in range(len(stroke_seq) - SEQ_LEN - 2):
         r = randomstart[j]
         x_validation_set.append(stroke_onehot_seq[r: r + SEQ_LEN])
         y_validation_set.append(stroke_seq[r+1: r + SEQ_LEN+1])
 
-# print (time.time()-timer1)
-#clip to multiple of batch_size and convert to tensor
 validation_batch_clipsize = (int(len(x_validation_set)/BATCH_SIZE)*BATCH_SIZE)
 X_validation = np.array(x_validation_set[:validation_batch_clipsize])
 y_validation = np.array(y_validation_set[:validation_batch_clipsize])
-# print ("val samples:" + str(len(X_validation)))
-# print (time.time()-timer1)
 
 #free some memory
 x_validation_set=None
 y_validation_set=None
 
-##20s for 20.000 samples
-
-# timer2=time.time()
-# linecount=0
-# samplecount=0
-
-# NPVX = np.empty((BATCH_SIZE*NUMBER_OF_TESTBATCHES,SEQ_LEN,len(alphabet)+4)) #//samples / sequence /values
-# NPVy = np.empty((BATCH_SIZE*NUMBER_OF_TESTBATCHES,SEQ_LEN,3)) #//samples / sequence /values
-
-# for i in range(len(stroke_seq)):
-#     if (samplecount < BATCH_SIZE*NUMBER_OF_TESTBATCHES):
-#         pass
-#     else:
-#         break
-#     linecount+=1
-
-#     stroke_seq = stroke_data[i]
-#     ascii_seq = ascii_data[i]
-#     points_per_line = len(stroke_seq)/len(ascii_seq)
-#     stroke_onehot_seq = []
-
-#     for k in range (len(stroke_seq)):
-#         char = ascii_seq[int(k/points_per_line)]
-#         index = alphabet.find(char)+1
-#         onehot = np.zeros(len(alphabet)+1)
-#         onehot[index] = 1
-
-#         combined = []
-#         combined.extend(stroke_seq[k])
-#         combined.extend(onehot.tolist())
-
-#         stroke_onehot_seq.append(combined)   
-
-#     randomstart = np.random.permutation(len(stroke_seq) - SEQ_LEN -2)
-#     for j in range(len(stroke_seq) - SEQ_LEN - 2):
-#         r = randomstart[j]
-#         if (samplecount < BATCH_SIZE*NUMBER_OF_TESTBATCHES):
-#             NPVX[samplecount] = stroke_onehot_seq[r: r + SEQ_LEN]
-#             NPVy[samplecount] = stroke_seq[r+1: r + SEQ_LEN+1]
-
-#             # TVX[samplecount] = stroke_onehot_seq[r: r + SEQ_LEN]
-#             # TVy[samplecount] = stroke_seq[r+1: r + SEQ_LEN+1]
-#             # x_validation_set.append(stroke_onehot_seq[r: r + SEQ_LEN])
-#             # y_validation_set.append(stroke_seq[r+1: r + SEQ_LEN+1])
-#             samplecount+=1
-#         else:
-#             break
-
-# print (time.time()-timer2)
-# print ("val samples:" + str(len(NPVX)))
-# print (linecount)
-# print (samplecount)
-
-
-
-
-
 print ("validation_set prepared: " + str(NUMBER_OF_TESTLINES) + " lines, " + str(len(X_validation)) + " samples.")
 print ()
 
+
+### set up the logger
 logger = LogLosses()
 logger.create()
+
+
+# important
+#
+# the complete validation set is created before actual training starts
+#
+# but as we have the attention window data for each pen-coord, a large dataset takes up loads of memory
+# so I do not prepare the entire training set, I use incremental training and prepare a new chunk of data each iteration
+# until we have gone through the entire training set. We repeat this process for the number of epochs : EPOCHS
 
 x_train_set = []
 y_train_set = []
@@ -268,17 +220,24 @@ Epoch=0
 sample=0
 
 train_start_time=time.time()
+
+# get the size of the training set
 NUMBER_OF_LINES = len(stroke_data) - NUMBER_OF_TESTLINES - 2
 
+# create a shuffled list of indexes with the length of the training set
 random_index_list = np.random.permutation(NUMBER_OF_LINES)
+
+##start training
 line=0
-for e in range(10):
+for e in range(EPOCHS):
     for i in range(NUMBER_OF_LINES):
         line+=1
         stroke_seq = stroke_data[NUMBER_OF_TESTLINES + random_index_list[i]]
         ascii_seq = ascii_data[NUMBER_OF_TESTLINES + random_index_list[i]]
 
-        ppc = len(stroke_seq)/len(ascii_seq)
+        ### precalculate the softwindow here
+
+        ppc = len(stroke_seq)/len(ascii_seq) # average number of points for each character in this sequence
         stroke_onehot_seq = []
 
         for windowpos in range (len(stroke_seq)):
@@ -293,11 +252,16 @@ for e in range(10):
                     char_strength = math.cos(((local_windowpos / windowwidth) + 0.5) * 2.0 * math.pi) * -0.5 + 0.5
                     onehot[alphabet.find(ascii_seq[lc])+1] = char_strength
 
+            # combine softwindow with pen-data
             combined = []
             combined.extend(stroke_seq[windowpos])
             combined.extend(onehot.tolist())
 
             stroke_onehot_seq.append(combined)   
+
+        ### now we append the sequences to the training array.
+        ### we can get multiple sequences out of one line, and randomize them
+        ### by shuffling the startpoint of each sequence
 
         randomstart = np.random.permutation(len(stroke_seq) - SEQ_LEN -2)
 
@@ -308,7 +272,7 @@ for e in range(10):
 
             sample+=1
 
-            #here we pause the loop and fit a bunch of batches
+            ### actual training starts here
             if (sample >= MAX_BATCHES*BATCH_SIZE):
                 if (Epoch%10==0):
                     print(" ┌───────┬────────┬───────────┬───────────┬───────────┬──────────┬──────────┐")
@@ -317,11 +281,8 @@ for e in range(10):
 
                 Epoch+=1
 
-
                 X_train = np.array(x_train_set,copy=False)
                 y_train = np.array(y_train_set,copy=False)
-
-                #### ^^^ This takes pretty long, can we optimize ? ^^^^^
 
                 print(" │  {:4d}".format(Epoch) + " │  {:5d}".format(line) + " │           │           │           │          │          │", end='\r')
 
@@ -344,6 +305,8 @@ for e in range(10):
                 x_train_set = []
                 y_train_set = []
 
+                ### validate
+
                 validation_time = time.time()
                 val_loss = model.evaluate(
                     X_validation, 
@@ -352,6 +315,7 @@ for e in range(10):
                     verbose=0
                 )
 
+                ### log data
                 vt = time.time() - validation_time
                 tt = time.time() - train_start_time
                 formatepochtime = "{:2d}".format(int(t / 3600)) + ":{:0>2d}".format(int(t%3600 / 60)) + ":{:0>2d}".format(int(t)%60)
@@ -361,8 +325,7 @@ for e in range(10):
                 print(" │  {:4d}".format(Epoch) + " │  {:5d}".format(line) + " │  " + formatepochtime + " │  " + formatvalidationtime + " │  " + formattotaltime + " │ {:+8.3f}".format(history.history['loss'][0]) + " │ {:+8.3f}".format(val_loss))
                 logger.update(history.history['loss'][0],val_loss)
 
+                ### save the model
                 model.save("checkpoints/bombidou_model_" + str(Epoch) + ".h5") 
-
-                line=1
 
 
