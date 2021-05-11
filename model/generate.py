@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 import time
 import math
 
-# weightfile = "checkpoints/bombidou_model_520.h5"
-weightfile = "checkpoints-saved/bombidou_model_520.h5"
+weightfile = "checkpoints/bombidou_model_375.h5"
+# weightfile = "checkpoints-saved/bombidou_model_375.h5"
 
 #model parameters
 HIDDEN_UNITS = 400
@@ -27,8 +27,8 @@ WINDOW_WIDTH = 2
 scale_factor = 100
 
 ### MDN tuning
-pi_temperature = 0.1
-sigma_temp = 0.1
+pi_temperature = 0.5
+sigma_temp = 0.5
 
 
 def zero_start_position():

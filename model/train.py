@@ -97,7 +97,7 @@ class LogLosses():
         plt.grid(b=True, which='major', color='#888888', linestyle='-')
         plt.minorticks_on()
         plt.grid(b=True, which='minor', color='#333333', linestyle='-')        
-        plt.title("LSTM units:" + str(HIDDEN_UNITS) + "\nMDN mixtures:" + str(MDN_MIXTURES) + "\nbatch size:" + str(BATCH_SIZE) + "\nsequence length:" + str(SEQ_LEN) + "\nlines:" + str(NUMBER_OF_LINES) + "\nvalidationlines:" + str(NUMBER_OF_TESTLINES) + "\ndropout:" + str(DROPOUT) + "\n",loc='left')
+        plt.title("LSTM units:" + str(HIDDEN_UNITS) + "\nMDN mixtures:" + str(MDN_MIXTURES) + "\nbatch size:" + str(BATCH_SIZE) + "\nsequence length:" + str(SEQ_LEN) + "\nvalidationlines:" + str(NUMBER_OF_TESTLINES) + "\ndropout:" + str(DROPOUT) + "\n",loc='left')
         plt.xlabel('epoch')
         plt.ylabel('loss')
         plt.tight_layout(pad=2.0)
@@ -184,7 +184,8 @@ for i in range(NUMBER_OF_TESTLINES):
 
     # append sequence to the validation set
     for j in range(len(stroke_seq) - SEQ_LEN - 2):
-        r = randomstart[j]
+        # r = randomstart[j]
+        r=j
         x_validation_set.append(stroke_onehot_seq[r: r + SEQ_LEN])
         y_validation_set.append(stroke_seq[r+1: r + SEQ_LEN+1])
 
@@ -216,8 +217,6 @@ logger.create()
 x_train_set = []
 y_train_set = []
 
-Epoch=0
-sample=0
 
 train_start_time=time.time()
 
@@ -229,7 +228,9 @@ random_index_list = np.random.permutation(NUMBER_OF_LINES)
 
 ##start training
 line=0
-for e in range(EPOCHS):
+Iteration=0
+sample=0
+for ep in range(EPOCHS):
     for i in range(NUMBER_OF_LINES):
         line+=1
         stroke_seq = stroke_data[NUMBER_OF_TESTLINES + random_index_list[i]]
@@ -266,7 +267,8 @@ for e in range(EPOCHS):
         randomstart = np.random.permutation(len(stroke_seq) - SEQ_LEN -2)
 
         for j in range(len(stroke_seq) - SEQ_LEN - 2):
-            r = randomstart[j]
+            # r = randomstart[j]
+            r=j
             x_train_set.append(stroke_onehot_seq[r: r + SEQ_LEN])
             y_train_set.append(stroke_seq[r+1: r + SEQ_LEN+1])
 
@@ -274,19 +276,19 @@ for e in range(EPOCHS):
 
             ### actual training starts here
             if (sample >= MAX_BATCHES*BATCH_SIZE):
-                if (Epoch%10==0):
+                if (Iteration%10==0):
                     print(" ┌───────┬────────┬───────────┬───────────┬───────────┬──────────┬──────────┐")
                     print(" │ Epoch │  Lines │ TrainTime │  Val_Time │ TotalTime │     Loss │ Val_Loss │")
                     print(" ├───────┼────────┼───────────┼───────────┼───────────┼──────────┼──────────┤")
 
-                Epoch+=1
+                Iteration+=1
 
                 X_train = np.array(x_train_set,copy=False)
                 y_train = np.array(y_train_set,copy=False)
 
-                print(" │  {:4d}".format(Epoch) + " │  {:5d}".format(line) + " │           │           │           │          │          │", end='\r')
+                print(" │  {:4d}".format(ep) + " │  {:5d}".format(line) + " │           │           │           │          │          │", end='\r')
 
-                epoch_time = time.time()
+                Iteration_time = time.time()
                 history = model.fit(
                     X_train, 
                     y_train, 
@@ -296,7 +298,7 @@ for e in range(EPOCHS):
                     verbose=0,
                     callbacks=[tf.keras.callbacks.TerminateOnNaN()]
                 )
-                t = time.time() - epoch_time
+                t = time.time() - Iteration_time
                 sample=0
 
                 #free some memory
@@ -318,14 +320,14 @@ for e in range(EPOCHS):
                 ### log data
                 vt = time.time() - validation_time
                 tt = time.time() - train_start_time
-                formatepochtime = "{:2d}".format(int(t / 3600)) + ":{:0>2d}".format(int(t%3600 / 60)) + ":{:0>2d}".format(int(t)%60)
+                formatiterationtime = "{:2d}".format(int(t / 3600)) + ":{:0>2d}".format(int(t%3600 / 60)) + ":{:0>2d}".format(int(t)%60)
                 formatvalidationtime = "{:2d}".format(int(vt / 3600)) + ":{:0>2d}".format(int(vt%3600 / 60)) + ":{:0>2d}".format(int(vt)%60)
                 formattotaltime = "{:2d}".format(int(tt / 3600)) + ":{:0>2d}".format(int(tt%3600 / 60)) + ":{:0>2d}".format(int(tt)%60)
 
-                print(" │  {:4d}".format(Epoch) + " │  {:5d}".format(line) + " │  " + formatepochtime + " │  " + formatvalidationtime + " │  " + formattotaltime + " │ {:+8.3f}".format(history.history['loss'][0]) + " │ {:+8.3f}".format(val_loss))
+                print(" │  {:4d}".format(e) + " │  {:5d}".format(line) + " │  " + formatiterationtime + " │  " + formatvalidationtime + " │  " + formattotaltime + " │ {:+8.3f}".format(history.history['loss'][0]) + " │ {:+8.3f}".format(val_loss))
                 logger.update(history.history['loss'][0],val_loss)
 
                 ### save the model
-                model.save("checkpoints/bombidou_model_" + str(Epoch) + ".h5") 
+                model.save("checkpoints/bombidou_model_" + str(Iteration) + ".h5") 
 
 

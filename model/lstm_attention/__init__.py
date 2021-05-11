@@ -47,7 +47,7 @@ class LSTM_ATTENTION(tf.keras.layers.Layer):
         x1,window = tf.split(x,num_or_size_splits=[3,x.shape[2]-3],axis=2)
         lstm1_out = self.lstm1(x1)
 
-        layer_out = tf.concat([lstm1_out,window],2)
+        layer_out = tf.concat([lstm1_out,x1,window],2)
         return layer_out
 
     def get_config(self):
